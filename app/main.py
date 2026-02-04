@@ -9,3 +9,6 @@ app.include_router(honeypot_router, prefix="/api")
 def home():
     return {"status": "running"}
 
+@app.get("/health")
+def health():
+    return {"ok": True}
