@@ -5,6 +5,7 @@ app = FastAPI(title="GUVI Honeypot API")
 
 app.include_router(honeypot_router, prefix="/api")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def home():
     return {"status": "running"}
+
