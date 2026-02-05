@@ -11,7 +11,8 @@ KEYS = [
 
 MODELS = [
     "gemini-3-flash",
-    "gemini-2.5-flash-lite"
+    "gemini-1.5-flash",
+    "gemini-2.5-flash-lite",
 ]
 
 
@@ -55,17 +56,32 @@ Message:
 {message_text}
 """
 
-    # ===== FAILOVER LOGIC =====
     for key in KEYS:
+
         if not key:
             continue
 
         try:
-            reply = try_generate(key, prompt)
-            if reply:
-                return reply
+            genai.configure(api_key=key)
 
-        except Exception as e:
-            print("Key failed:", e)
+            for model_name in MODELS:
+
+                try:
+                    print(f"Trying KEY + MODEL → {model_name}")
+
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+
+                    if response.text:
+                        print(f"SUCCESS → {model_name}")
+                        return response.text.strip()
+
+                except Exception as model_error:
+                    print(f"MODEL FAIL → {model_name} → {model_error}")
+                    continue
+
+        except Exception as key_error:
+            print(f"KEY FAIL → {key_error}")
+            continue
 
     return "Can you explain more about this?"
