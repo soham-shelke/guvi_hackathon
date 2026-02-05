@@ -4,18 +4,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ===== KEYS (Auto filter empty) =====
 KEYS = [
     os.getenv("GEMINI_API_KEY_1"),
     os.getenv("GEMINI_API_KEY_2"),
 ]
 
+KEYS = [k for k in KEYS if k]
+
+# ===== MODEL PRIORITY (BEST → FALLBACK) =====
 MODELS = [
-    "gemini-3-flash",
-    "gemini-1.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+    "gemini-2.0-flash"
 ]
 
-
+# ===== SYSTEM PROMPT =====
 SYSTEM_PROMPT = """
 You are part of a cybersecurity research honeypot system interacting with a suspected scammer.
 
@@ -30,33 +35,15 @@ Do NOT include phrases like "My Response", "Here is my response", or roleplay ma
 Do NOT include markdown formatting.
 Do NOT include analysis or planning text.
 Write ONLY the final SMS-style reply message.
-
 """
 
 
-def try_generate(key, prompt):
-
-    genai.configure(api_key=key)
-
-    for model_name in MODELS:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-
-            if response.text:
-                return response.text.strip()
-
-        except Exception as e:
-            print("Model failed:", model_name, e)
-
-    return None
-
+# ===== OUTPUT CLEANER =====
 def clean_gemini_output(text):
 
     if not text:
         return text
 
-    # Remove common leakage patterns
     bad_markers = [
         "My Response:",
         "Here's my response:",
@@ -65,7 +52,8 @@ def clean_gemini_output(text):
         "Okay, I need to respond",
         "Here's how I'd respond",
         "You:",
-        "**My Response:**"
+        "**My Response:**",
+        "---"
     ]
 
     cleaned = text
@@ -74,12 +62,12 @@ def clean_gemini_output(text):
         if marker in cleaned:
             cleaned = cleaned.split(marker)[-1]
 
-    # Remove markdown stars
     cleaned = cleaned.replace("**", "")
 
     return cleaned.strip()
 
 
+# ===== MAIN GENERATION FUNCTION =====
 def generate_gemini_reply(message_text, session_messages):
 
     history_text = "\n".join(session_messages[-5:])
@@ -94,35 +82,26 @@ Message:
 {message_text}
 """
 
-    for key in KEYS:
+    # ===== MODEL FIRST → KEY FAILOVER =====
+    for model_name in MODELS:
 
-        if not key:
-            continue
+        for key in KEYS:
 
-        try:
-            genai.configure(api_key=key)
+            try:
+                print(f"Trying MODEL + KEY → {model_name} | {key[:6]}...")
 
-            for model_name in MODELS:
+                genai.configure(api_key=key)
 
-                try:
-                    print(f"Trying KEY + MODEL → {model_name}")
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
 
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(prompt)
+                if response and response.text:
+                    print(f"SUCCESS → {model_name}")
+                    return clean_gemini_output(response.text.strip())
 
-                    if response.text:
-                        print(f"SUCCESS → {model_name}")
-                        return clean_gemini_output(response.text.strip())
+            except Exception as e:
+                print(f"FAIL → {model_name} | {key[:6]} → {e}")
+                continue
 
-
-                except Exception as model_error:
-                    print(f"MODEL FAIL → {model_name} → {model_error}")
-                    continue
-
-        except Exception as key_error:
-            print(f"KEY FAIL → {key_error}")
-            continue
-
+    # ===== FINAL FALLBACK =====
     return "Can you explain more about this?"
-
-
