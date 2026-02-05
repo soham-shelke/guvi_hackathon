@@ -1,30 +1,29 @@
 import re
 
-
 def extract_intelligence(message_text, session):
 
-    # Ensure intelligence exists
     if "intelligence" not in session:
         session["intelligence"] = {
             "upiIds": [],
             "phoneNumbers": [],
-            "phishingLinks": []
+            "phishingLinks": [],
+            "suspiciousKeywords": []
         }
 
-    # Extract new values
-    new_upi = re.findall(r"[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}", message_text)
+    # ===== HIGH CAPTURE UPI REGEX =====
+    # Captures most payment handles including fake scam domains
+    upi_pattern = r"\b[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9._-]{2,}\b"
 
-    new_phone = re.findall(
-        r"(?:\+91[-\s]?|0)?[6-9]\d{9}",
-        message_text
-    )
+    # ===== PHONE REGEX (KEEPS FULL NUMBER) =====
+    phone_pattern = r"(?:\+91[-\s]?)?[6-9]\d{9}"
 
-    new_links = re.findall(
-        r"(https?://[^\s]+)",
-        message_text
-    )
+    # ===== LINK REGEX =====
+    link_pattern = r"(https?://[^\s]+)"
 
-    # Merge without duplicates
+    new_upi = re.findall(upi_pattern, message_text)
+    new_phone = re.findall(phone_pattern, message_text)
+    new_links = re.findall(link_pattern, message_text)
+
     session["intelligence"]["upiIds"] = list(
         set(session["intelligence"]["upiIds"] + new_upi)
     )
