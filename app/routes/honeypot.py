@@ -13,6 +13,7 @@ router = APIRouter()
 API_KEY = "test123"
 
 
+# ===== MODELS =====
 class Message(BaseModel):
     sender: str
     text: str
@@ -26,18 +27,34 @@ class HoneypotRequest(BaseModel):
     metadata: Dict[str, Any]
 
 
+# ===== MAIN ENDPOINT =====
 @router.post("/honeypot")
 async def honeypot_endpoint(
     request: HoneypotRequest,
     x_api_key: str = Header(...)
 ):
 
+    # ===== AUTH =====
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
+    # ===== SESSION LOAD =====
     session = get_session(request.sessionId)
 
+    # ===== SAFE SESSION INIT (NO BREAK IF MISSING KEYS) =====
+    session.setdefault("messages", [])
+    session.setdefault("scam_detected", False)
+    session.setdefault("callback_sent", False)
+    session.setdefault("intelligence", {
+        "upiIds": [],
+        "phoneNumbers": [],
+        "phishingLinks": [],
+        "suspiciousKeywords": []
+    })
+
     message_text = request.message.text
+
+    # ===== STORE MESSAGE =====
     session["messages"].append(message_text)
 
     # ===== SCAM DETECTION =====
@@ -47,7 +64,7 @@ async def honeypot_endpoint(
         session["scam_detected"] = True
 
     # ===== INTELLIGENCE EXTRACTION =====
-    if session.get("scam_detected"):
+    if session["scam_detected"]:
         extract_intelligence(message_text, session)
 
     # ===== GEMINI REPLY =====
@@ -56,6 +73,7 @@ async def honeypot_endpoint(
         session["messages"]
     )
 
+    # ===== SAFE FALLBACK =====
     if not isinstance(reply, str) or len(reply.strip()) == 0:
         reply = "Can you explain more about this?"
 
@@ -63,11 +81,14 @@ async def honeypot_endpoint(
 
     # ===== FINAL CALLBACK =====
     if (
-        session.get("scam_detected")
-        and len(session.get("messages", [])) >= 6
-        and not session.get("callback_sent", False)
+        session["scam_detected"]
+        and len(session["messages"]) >= 6
+        and not session["callback_sent"]
     ):
-        send_final_callback(request.sessionId, session)
+        try:
+            send_final_callback(request.sessionId, session)
+        except Exception as e:
+            print("Callback Error:", e)
 
     return {
         "status": "success",
