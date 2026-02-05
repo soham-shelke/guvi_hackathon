@@ -41,3 +41,22 @@ async def root_post(
     except Exception as e:
         print("ROOT POST ERROR:", e)
         raise HTTPException(status_code=400, detail="Invalid request body")
+
+@app.post("/v2")
+async def root_v2_post(
+    request: Request,
+    x_api_key: str = Header(None)
+):
+    try:
+        body = await request.json()
+
+        model_request = HoneypotRequest(**body)
+
+        return await honeypot_endpoint(
+            request=model_request,
+            x_api_key=x_api_key
+        )
+
+    except Exception as e:
+        print("V2 ROOT POST ERROR:", e)
+        raise HTTPException(status_code=400, detail="Invalid request body")
