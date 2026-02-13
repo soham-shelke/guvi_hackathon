@@ -21,16 +21,22 @@ def normalize_phone(phone):
 
 def extract_intelligence(message_text, session):
 
+    # ========================
+    # SAFE INTELLIGENCE INIT
+    # ========================
     if "intelligence" not in session:
-        session["intelligence"] = {
-            "upiIds": [],
-            "phoneNumbers": [],
-            "phishingLinks": [],
-            "suspiciousKeywords": [],
-            "bankAccounts": []
-        }
+        session["intelligence"] = {}
 
-    msg = message_text.lower()
+    intel = session["intelligence"]
+
+    # Ensure ALL keys exist (Backward Compatible)
+    intel.setdefault("upiIds", [])
+    intel.setdefault("phoneNumbers", [])
+    intel.setdefault("phishingLinks", [])
+    intel.setdefault("suspiciousKeywords", [])
+    intel.setdefault("bankAccounts", [])
+
+    msg_lower = message_text.lower()
 
     # ========================
     # UPI
@@ -39,26 +45,24 @@ def extract_intelligence(message_text, session):
     new_upi = re.findall(upi_pattern, message_text)
 
     # ========================
-    # BANK ACCOUNTS (FIRST)
+    # BANK ACCOUNTS FIRST
     # ========================
     bank_pattern = r"\b\d{12,18}\b"
     bank_accounts = re.findall(bank_pattern, message_text)
 
-    # Remove bank accounts from message for phone detection
-    cleaned_for_phone = message_text
+    cleaned_text = message_text
     for acc in bank_accounts:
-        cleaned_for_phone = cleaned_for_phone.replace(acc, " ")
+        cleaned_text = cleaned_text.replace(acc, " ")
 
     # ========================
-    # GLOBAL PHONE DETECTION
+    # GLOBAL PHONE
     # ========================
     phone_pattern = r"(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}"
-    phone_raw = re.findall(phone_pattern, cleaned_for_phone)
-
+    phone_raw = re.findall(phone_pattern, cleaned_text)
     phones = [normalize_phone(p) for p in phone_raw]
 
     # ========================
-    # LINKS (http + www)
+    # LINKS
     # ========================
     link_pattern = r"(https?://[^\s]+|www\.[^\s]+)"
     links = re.findall(link_pattern, message_text)
@@ -73,13 +77,11 @@ def extract_intelligence(message_text, session):
         "frozen", "suspend", "click link"
     ]
 
-    found_keywords = [k for k in keyword_list if k in msg]
+    found_keywords = [k for k in keyword_list if k in msg_lower]
 
     # ========================
     # STORE UNIQUE
     # ========================
-    intel = session["intelligence"]
-
     intel["upiIds"] = list(set(intel["upiIds"] + new_upi))
     intel["phoneNumbers"] = list(set(intel["phoneNumbers"] + phones))
     intel["phishingLinks"] = list(set(intel["phishingLinks"] + links))
