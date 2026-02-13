@@ -1,24 +1,6 @@
 import re
 
 
-def normalize_phone(phone):
-    phone = phone.replace(" ", "").replace("-", "")
-
-    if phone.startswith("00"):
-        phone = "+" + phone[2:]
-
-    if phone.startswith("0") and len(phone) > 10:
-        phone = phone[1:]
-
-    if phone.startswith("+"):
-        return phone
-
-    if len(phone) == 10:
-        return "+91" + phone
-
-    return phone
-
-
 def extract_intelligence(message_text, session):
 
     # ========================
@@ -29,7 +11,6 @@ def extract_intelligence(message_text, session):
 
     intel = session["intelligence"]
 
-    # Ensure ALL keys exist (Backward Compatible)
     intel.setdefault("upiIds", [])
     intel.setdefault("phoneNumbers", [])
     intel.setdefault("phishingLinks", [])
@@ -45,21 +26,23 @@ def extract_intelligence(message_text, session):
     new_upi = re.findall(upi_pattern, message_text)
 
     # ========================
-    # BANK ACCOUNTS FIRST
+    # PHONE → ONLY + NUMBERS
     # ========================
-    bank_pattern = r"\b\d{12,18}\b"
-    bank_accounts = re.findall(bank_pattern, message_text)
+    phone_pattern = r"\+\d{10,15}"
+    phones = re.findall(phone_pattern, message_text)
 
+    # ========================
+    # REMOVE PHONES FROM TEXT
+    # ========================
     cleaned_text = message_text
-    for acc in bank_accounts:
-        cleaned_text = cleaned_text.replace(acc, " ")
+    for p in phones:
+        cleaned_text = cleaned_text.replace(p, " ")
 
     # ========================
-    # GLOBAL PHONE
+    # BANK ACCOUNTS → DIGITS ONLY
     # ========================
-    phone_pattern = r"(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}"
-    phone_raw = re.findall(phone_pattern, cleaned_text)
-    phones = [normalize_phone(p) for p in phone_raw]
+    bank_pattern = r"\b\d{10,18}\b"
+    bank_accounts = re.findall(bank_pattern, cleaned_text)
 
     # ========================
     # LINKS
