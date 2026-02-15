@@ -13,7 +13,8 @@ def home():
     return {"status": "running"}
 
 
-@app.get("/health", methods=["GET", "HEAD"])
+# ✅ FIXED HEALTH ROUTE (GET + HEAD SUPPORT)
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {
         "status": "healthy",
@@ -21,7 +22,7 @@ def health():
     }
 
 
-# 🚨 FIXED ROOT POST HANDLER
+# 🚨 ROOT POST HANDLER
 @app.post("/")
 async def root_post(
     request: Request,
@@ -30,7 +31,6 @@ async def root_post(
     try:
         body = await request.json()
 
-        # Convert dict → Pydantic model
         model_request = HoneypotRequest(**body)
 
         return await honeypot_endpoint(
@@ -42,6 +42,8 @@ async def root_post(
         print("ROOT POST ERROR:", e)
         raise HTTPException(status_code=400, detail="Invalid request body")
 
+
+# 🚨 V2 ROOT POST HANDLER
 @app.post("/v2")
 async def root_v2_post(
     request: Request,
