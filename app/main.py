@@ -13,7 +13,7 @@ def home():
     return {"status": "running"}
 
 
-@app.get("/health")
+@app.get("/health", methods=["GET", "HEAD"])
 def health():
     return {
         "status": "healthy",
