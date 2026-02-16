@@ -3,104 +3,92 @@ import re
 
 def normalize_phone(phone):
     phone = phone.replace(" ", "").replace("-", "")
+
     if phone.startswith("+"):
         return phone
-    if len(phone) >= 10:
-        return phone
+
+    if phone.startswith("0"):
+        phone = phone[1:]
+
+    if len(phone) >= 10 and phone.isdigit():
+        return "+" + phone
+
     return phone
 
 
 def extract_intelligence(message_text, session):
 
-    try:
+    # ✅ SAFE INITIALIZATION (Prevents Missing Key Errors)
+    if "intelligence" not in session:
+        session["intelligence"] = {}
 
-        if "intelligence" not in session:
-            session["intelligence"] = {
-                "upiIds": [],
-                "phoneNumbers": [],
-                "phishingLinks": [],
-                "suspiciousKeywords": [],
-                "bankAccounts": [],
-                "emails": []   # ✅ NEW FIELD
-            }
+    intelligence = session["intelligence"]
 
-        intel = session["intelligence"]
+    intelligence.setdefault("upiIds", [])
+    intelligence.setdefault("phoneNumbers", [])
+    intelligence.setdefault("phishingLinks", [])
+    intelligence.setdefault("suspiciousKeywords", [])
+    intelligence.setdefault("bankAccounts", [])
+    intelligence.setdefault("emails", [])
 
-        # =========================
-        # UPI DETECTION
-        # =========================
-        upi_pattern = r"\b[a-zA-Z0-9._-]{2,}@[a-zA-Z]{2,}\b"
+    # ========================
+    # PATTERNS
+    # ========================
 
-        # =========================
-        # EMAIL DETECTION (NEW)
-        # =========================
-        email_pattern = r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
+    upi_pattern = r"\b[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9._-]{2,}\b"
 
-        # =========================
-        # PHONE DETECTION
-        # Only if starts with +
-        # =========================
-        phone_pattern = r"\+\d{8,15}"
+    phone_pattern = r"\+\d{10,15}"
 
-        # =========================
-        # LINKS (http + www)
-        # =========================
-        link_pattern = r"(https?://[^\s]+|www\.[^\s]+)"
+    bank_pattern = r"\b\d{9,18}\b"
 
-        # =========================
-        # BANK ACCOUNT (Digits not after +)
-        # =========================
-        bank_pattern = r"(?<!\+)\b\d{9,18}\b"
+    link_pattern = r"(https?://[^\s]+|www\.[^\s]+)"
 
-        # =========================
-        # SUSPICIOUS KEYWORDS
-        # =========================
-        suspicious_words = [
-            "urgent",
-            "verify",
-            "immediate",
-            "otp",
-            "blocked",
-            "suspend",
-            "kyc",
-            "update",
-            "expire",
-            "limited time",
-            "act now",
-            "send otp"
-        ]
+    email_pattern = r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
 
-        # =========================
-        # FIND ALL
-        # =========================
-        new_upi = re.findall(upi_pattern, message_text)
-        new_emails = re.findall(email_pattern, message_text)
-        new_phone_raw = re.findall(phone_pattern, message_text)
-        new_links = re.findall(link_pattern, message_text)
-        new_bank = re.findall(bank_pattern, message_text)
+    keyword_list = [
+        "urgent",
+        "verify",
+        "otp",
+        "blocked",
+        "suspended",
+        "immediate",
+        "account blocked",
+        "verify now"
+    ]
 
-        # Normalize phone
-        new_phone = [normalize_phone(p) for p in new_phone_raw]
+    # ========================
+    # EXTRACTION
+    # ========================
 
-        # Keywords
-        found_keywords = [
-            word for word in suspicious_words
-            if word.lower() in message_text.lower()
-        ]
+    upis = re.findall(upi_pattern, message_text)
+    phones_raw = re.findall(phone_pattern, message_text)
+    banks = re.findall(bank_pattern, message_text)
+    links = re.findall(link_pattern, message_text)
+    emails = re.findall(email_pattern, message_text)
 
-        # =========================
-        # MERGE INTO SESSION
-        # =========================
-        intel["upiIds"] = list(set(intel["upiIds"] + new_upi))
-        intel["emails"] = list(set(intel["emails"] + new_emails))
-        intel["phoneNumbers"] = list(set(intel["phoneNumbers"] + new_phone))
-        intel["phishingLinks"] = list(set(intel["phishingLinks"] + new_links))
-        intel["bankAccounts"] = list(set(intel["bankAccounts"] + new_bank))
-        intel["suspiciousKeywords"] = list(set(intel["suspiciousKeywords"] + found_keywords))
+    phones = [normalize_phone(p) for p in phones_raw]
 
-        session["intelligence"] = intel
+    # Remove phone digits from bank accounts
+    clean_banks = []
+    for b in banks:
+        if not any(b in p for p in phones):
+            clean_banks.append(b)
 
-        print("INTELLIGENCE:", session["intelligence"])
+    found_keywords = []
+    lower_msg = message_text.lower()
+    for kw in keyword_list:
+        if kw in lower_msg:
+            found_keywords.append(kw)
 
-    except Exception as e:
-        print("Extraction error:", e)
+    # ========================
+    # MERGE INTO SESSION
+    # ========================
+
+    intelligence["upiIds"] = list(set(intelligence["upiIds"] + upis))
+    intelligence["phoneNumbers"] = list(set(intelligence["phoneNumbers"] + phones))
+    intelligence["bankAccounts"] = list(set(intelligence["bankAccounts"] + clean_banks))
+    intelligence["phishingLinks"] = list(set(intelligence["phishingLinks"] + links))
+    intelligence["emails"] = list(set(intelligence["emails"] + emails))
+    intelligence["suspiciousKeywords"] = list(set(intelligence["suspiciousKeywords"] + found_keywords))
+
+    print("INTELLIGENCE:", intelligence)
