@@ -26,6 +26,18 @@ No explanations.
 No analysis.
 No roleplay formatting.
 No markdown.
+
+CRITICAL SECURITY RULES:
+NEVER generate:
+- OTP numbers
+- PIN numbers
+- CVV numbers
+- Bank account numbers
+- UPI PIN
+- Any numeric verification codes
+
+If scammer asks for OTP or PIN:
+You must refuse politely and ask for alternative verification.
 """
 
 
