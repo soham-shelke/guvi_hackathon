@@ -1,79 +1,87 @@
 import google.generativeai as genai
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
+import time
 
 KEYS = [
     os.getenv("GEMINI_API_KEY_1"),
-    os.getenv("GEMINI_API_KEY_2")
+    os.getenv("GEMINI_API_KEY_2"),
 ]
 
 MODELS = [
     "gemini-3-flash-preview",
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
     "gemini-2.0-flash"
 ]
 
-FALLBACK_REPLY = "Can you explain more about this?"
+FAST_FALLBACK_REPLIES = [
+    "I didn’t get OTP yet, can you resend?",
+    "Which account is this regarding?",
+    "I am not understanding, can you explain?",
+    "Is this from bank or support team?"
+]
 
 SYSTEM_PROMPT = """
-You are part of a cybersecurity honeypot interacting with a scammer.
-
-Return ONLY the SMS reply text.
-No explanations.
-No analysis.
-No roleplay formatting.
-No markdown.
-
-CRITICAL SECURITY RULES:
-NEVER generate:
-- OTP numbers
-- PIN numbers
-- CVV numbers
-- Bank account numbers
-- UPI PIN
-- Any numeric verification codes
-
-If scammer asks for OTP or PIN:
-You must refuse politely and ask for alternative verification.
+You are a worried customer talking to support.
+Return only SMS reply.
+Never send OTP.
+Never confirm payment.
+Keep message short.
 """
 
 
 def generate_gemini_reply(message_text, session_messages):
 
-    history_text = "\n".join(session_messages[-5:])
+    history = "\n".join(session_messages[-4:])
 
     prompt = f"""
 {SYSTEM_PROMPT}
 
 Conversation:
-{history_text}
+{history}
 
 Message:
 {message_text}
 """
 
-    for model in MODELS:
-        for key in KEYS:
+    start_time = time.time()
 
-            if not key:
-                continue
+    for key in KEYS:
+        if not key:
+            continue
 
-            try:
-                print(f"Trying MODEL + KEY → {model}")
+        try:
+            genai.configure(api_key=key)
 
-                genai.configure(api_key=key)
-                model_obj = genai.GenerativeModel(model)
+            for model_name in MODELS:
 
-                response = model_obj.generate_content(prompt)
+                # 🔥 HARD LATENCY LIMIT
+                if time.time() - start_time > 3.5:
+                    return FAST_FALLBACK_REPLIES[0]
 
-                if response and response.text:
-                    print(f"SUCCESS → {model}")
-                    return response.text.strip()
+                try:
+                    model = genai.GenerativeModel(model_name)
 
-            except Exception as e:
-                print(f"FAIL → {model} → {e}")
+                    response = model.generate_content(
+                        prompt,
+                        generation_config={
+                            "temperature": 0.4,
+                            "max_output_tokens": 60
+                        }
+                    )
 
-    return FALLBACK_REPLY
+                    if response.text:
+                        text = response.text.strip()
+
+                        # Safety filter
+                        if "otp is" in text.lower():
+                            return FAST_FALLBACK_REPLIES[1]
+
+                        return text
+
+                except Exception:
+                    continue
+
+        except Exception:
+            continue
+
+    return FAST_FALLBACK_REPLIES[2]
